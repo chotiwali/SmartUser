@@ -5,3 +5,4 @@ build/
 .env
 .idea/
 .vscode/
+.claude/settings.local.json/
