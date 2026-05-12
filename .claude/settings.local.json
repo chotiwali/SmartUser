@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/shabi/Documents/Coding/SmartUser/smart-overlay && npm install 2>&1)",
+      "Bash(npm config:*)",
+      "Read(//Users/shabi/.npm/_cacache/content-v2/sha512/8a/**)",
+      "Bash(cd /Users/shabi/Documents/Coding/SmartUser/smart-overlay && npm install --cache /tmp/npm-cache-smartoverlay 2>&1)",
+      "Bash(cd \"/Users/shabi/Documents/Coding/SmartUser copy/smart-overlay\" && npm install groq-sdk --save 2>&1)",
+      "Bash(hdiutil detach:*)",
+      "Bash(cd \"/Users/shabi/Documents/Coding/SmartUser copy/smart-overlay\" && npm run build:mac 2>&1 | tail -15)",
+      "Bash(node \"/Users/shabi/Documents/Coding/SmartUser copy/generate-keys.js\" 50 2>&1)",
+      "Bash(node \"/Users/shabi/Documents/Coding/SmartUser copy/generate-keys.js\" 50)"
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "name": "prepaura",
+  "version": "1.0.0",
+  "description": "PrepAura — AI-powered interview prep coach, invisible to screen sharing",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:win": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "groq-sdk": "^0.9.1",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "electron": "^34.3.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.prepaura.app",
+    "productName": "PrepAura",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "build/**/*",
+      "node_modules/**/*",
+      "setup_audio.swift",
+      "transcribe.py"
+    ],
+    "asarUnpack": [
+      "setup_audio.swift",
+      "transcribe.py"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "hardenedRuntime": false,
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "PrepAura needs microphone access to listen to interview questions.",
+        "NSScreenCaptureUsageDescription": "PrepAura needs screen recording to capture and solve coding problems."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "PrepAura",
+      "background": null,
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

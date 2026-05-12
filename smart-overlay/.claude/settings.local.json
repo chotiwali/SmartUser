@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm start:*)",
+      "Bash(npm run:*)",
+      "Bash(ls -lh /Users/shabi/Documents/Coding/SmartUser/smart-overlay/dist/*.dmg 2>/dev/null)"
+    ]
+  }
+}
