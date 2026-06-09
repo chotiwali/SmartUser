@@ -1,0 +1,145 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# PrepAura — CI/CD Build Workflow
+#
+# Triggers:
+#   • Every push to main
+#   • Every pull request targeting main
+#   • Manual trigger via GitHub UI (workflow_dispatch)
+#
+# Matrix:
+#   • macOS latest  → PrepAura-*.dmg   (arm64)
+#   • Windows latest → PrepAura-*.exe  (NSIS installer, x64)
+#
+# Node.js 20 LTS is used because Electron 34 bundles Node 20.18.x internally.
+# Matching the major version avoids native-module ABI mismatches.
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Build PrepAura
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build — ${{ matrix.os-name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Let both platform builds run to completion even if one fails.
+      fail-fast: false
+      matrix:
+        include:
+          # ── macOS arm64 DMG ──────────────────────────────────────────────
+          # macos-latest == macos-14 (arm64 Sonoma). Matches the arm64 DMG
+          # target already configured in package.json.
+          - os: macos-latest
+            os-name: macOS
+            build-cmd: build:mac
+            artifact-name: PrepAura-Mac
+            artifact-path: dist/*.dmg
+
+          # ── Windows x64 NSIS installer ───────────────────────────────────
+          # windows-latest == Windows Server 2022. Builds natively so wine
+          # is not required. NSIS and 7-Zip are pre-installed on this runner.
+          - os: windows-latest
+            os-name: Windows
+            build-cmd: build:win
+            artifact-name: PrepAura-Windows
+            artifact-path: dist/*.exe
+
+    env:
+      # Redirect both Electron binary downloads and electron-builder tool
+      # downloads into the workspace so actions/cache can persist them.
+      # These env vars are the official override mechanism for each tool:
+      #   ELECTRON_CACHE        — read by @electron/get during npm install
+      #   ELECTRON_BUILDER_CACHE — read by electron-builder for NSIS, 7zip, etc.
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js ───────────────────────────────────────────────────────
+      # cache: 'npm' saves ~/.npm (the global npm content cache) keyed on
+      # package-lock.json automatically — no separate step needed for npm.
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Electron binary + builder tools cache ─────────────────────────
+      # Saves ~150 MB Electron binary + NSIS/7-Zip tools between runs.
+      # Cache is invalidated when package-lock.json changes (new Electron
+      # version = new binary to download).
+      - name: Cache Electron binaries and build tools
+        uses: actions/cache@v4
+        id: electron-cache
+        with:
+          path: ${{ github.workspace }}/.cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      # ── 4. Install ───────────────────────────────────────────────────────
+      # npm ci is faster and stricter than npm install in CI:
+      #   • Requires package-lock.json to exist
+      #   • Deletes node_modules before installing
+      #   • Errors if lock file would need updating
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 5. Build ─────────────────────────────────────────────────────────
+      # macOS:   electron-builder --mac --publish never → dist/*.dmg
+      # Windows: electron-builder --win --publish never → dist/*.exe
+      # --publish never prevents accidental pushes to GitHub Releases.
+      - name: Build — ${{ matrix.os-name }}
+        run: npm run ${{ matrix.build-cmd }}
+
+      # ── 6. Upload artifact ───────────────────────────────────────────────
+      # Artifacts are available on the run's summary page for 30 days.
+      # if-no-files-found: error fails the step loudly if the build produced
+      # nothing, rather than silently uploading an empty archive.
+      - name: Upload — ${{ matrix.artifact-name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # ── 7. Build summary ─────────────────────────────────────────────────
+      # Writes a markdown table to the run's Summary tab.
+      # Runs even if a previous step failed so you always see context.
+      - name: Write build summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            ICON="✅"
+          else
+            ICON="❌"
+          fi
+
+          {
+            echo "## ${ICON} PrepAura — ${{ matrix.os-name }} Build"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Platform | ${{ matrix.os-name }} |"
+            echo "| Status | ${{ job.status }} |"
+            echo "| Artifact | \`${{ matrix.artifact-name }}\` |"
+            echo "| Output pattern | \`${{ matrix.artifact-path }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Retention | 30 days |"
+          } >> "$GITHUB_STEP_SUMMARY"
