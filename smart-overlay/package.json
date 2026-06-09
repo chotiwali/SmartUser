@@ -26,12 +26,10 @@
       "renderer/**/*",
       "build/**/*",
       "node_modules/**/*",
-      "setup_audio.swift",
-      "transcribe.py"
+      "setup_audio.swift"
     ],
     "asarUnpack": [
-      "setup_audio.swift",
-      "transcribe.py"
+      "setup_audio.swift"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -61,7 +59,12 @@
       }
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
       "requestedExecutionLevel": "requireAdministrator"
     },
     "linux": {

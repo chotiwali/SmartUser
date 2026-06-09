@@ -37,6 +37,19 @@ const histNext         = document.getElementById('hist-next');
 const histLabel        = document.getElementById('hist-label');
 const openaiKeyGroup   = document.getElementById('openai-key-group');
 
+// ── Platform detection ────────────────────────────────────────
+const isMac = navigator.platform.toLowerCase().startsWith('mac');
+const captureShortcut = isMac ? '⌘⇧C' : 'Ctrl+Shift+C';
+
+// Apply platform-correct labels on page load
+document.getElementById('capture-btn').title = `Capture screen & solve (${captureShortcut})`;
+if (!isMac) {
+  const kbdEls = document.querySelectorAll('.shortcuts-info .shortcut kbd');
+  if (kbdEls[0]) kbdEls[0].textContent = 'Ctrl+Shift+Space';
+  if (kbdEls[1]) kbdEls[1].textContent = 'Ctrl+Shift+A';
+  if (kbdEls[2]) kbdEls[2].textContent = 'Ctrl+Shift+C';
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 function setStatus(state, text) {
   statusDot.className = `dot ${state}`;
@@ -389,13 +402,19 @@ async function init() {
   }
   await refreshTrialUI();
 
-  // Auto-detect BlackHole and update dropdown
+  // Auto-detect virtual loopback device and update dropdown
   const blackhole = await findBlackHoleDevice();
   const sysOption = audioSourceSel.querySelector('option[value="system"]');
   if (blackhole) {
-    sysOption.textContent = '🎙+🔊 Mic + BlackHole (both voices)';
+    const l = blackhole.label.toLowerCase();
+    const isVbAudio = l.includes('cable') || l.includes('voicemeeter') || l.includes('vb-audio');
+    sysOption.textContent = isVbAudio
+      ? '🎙+🔊 Mic + VB-Audio Cable (both voices)'
+      : '🎙+🔊 Mic + BlackHole (both voices)';
   } else {
-    sysOption.textContent = '🎙+🔊 Mic + System (install BlackHole)';
+    sysOption.textContent = isMac
+      ? '🎙+🔊 Mic + System (install BlackHole)'
+      : '🎙+🔊 Mic + System (install VB-Audio Cable)';
     sysOption.disabled = true;
   }
 }
@@ -542,7 +561,7 @@ function startWebSpeech() {
   recognition.start();
 }
 
-// ── Detect BlackHole virtual audio device ──────────────────────
+// ── Detect virtual audio loopback device (BlackHole on macOS, VB-Audio on Windows) ─
 async function findBlackHoleDevice() {
   // Device labels are empty until mic permission is granted — request it first
   try {
@@ -550,7 +569,11 @@ async function findBlackHoleDevice() {
     tmp.getTracks().forEach(t => t.stop());
   } catch (_) {}
   const devices = await navigator.mediaDevices.enumerateDevices();
-  return devices.find(d => d.kind === 'audioinput' && d.label.toLowerCase().includes('blackhole'));
+  return devices.find(d => {
+    if (d.kind !== 'audioinput') return false;
+    const l = d.label.toLowerCase();
+    return l.includes('blackhole') || l.includes('cable output') || l.includes('voicemeeter') || l.includes('vb-audio');
+  });
 }
 
 // ── Mix mic + BlackHole into a single stream ───────────────────
@@ -912,14 +935,14 @@ async function captureAndSolve() {
     setStatus('error', 'Screen scan timed out');
     questionText.textContent = 'Could not read screen. Make sure Screen Recording permission is granted.';
     captureBtn.classList.remove('scanning');
-    captureBtn.title = 'Capture screen & solve (⌘⇧C)';
+    captureBtn.title = `Capture screen & solve (${captureShortcut})`;
   }, 30000);
 
   window.electronAPI.onStreamChunk((chunk) => {
     if (chunk.trialExpired) {
       clearTimeout(timeout);
       captureBtn.classList.remove('scanning');
-      captureBtn.title = 'Capture screen & solve (⌘⇧C)';
+      captureBtn.title = `Capture screen & solve (${captureShortcut})`;
       showUpgradeModal();
       return;
     }
@@ -929,7 +952,7 @@ async function captureAndSolve() {
         `<div class="answer-row"><div class="answer-row-body"><div class="row-theory"><p>⚠ ${escHtml(chunk.error)}</p></div><div class="row-code"></div></div></div>`;
       setStatus('error', 'Error');
       captureBtn.classList.remove('scanning');
-      captureBtn.title = 'Capture screen & solve (⌘⇧C)';
+      captureBtn.title = `Capture screen & solve (${captureShortcut})`;
       return;
     }
     if (chunk.done) {
@@ -943,7 +966,7 @@ async function captureAndSolve() {
       scrollToBottom();
       setStatus('ready', 'Ready');
       captureBtn.classList.remove('scanning');
-      captureBtn.title = 'Capture screen & solve (⌘⇧C)';
+      captureBtn.title = `Capture screen & solve (${captureShortcut})`;
       return;
     }
     if (chunk.text) {

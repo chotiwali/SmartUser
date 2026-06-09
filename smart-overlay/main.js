@@ -253,25 +253,23 @@ ipcMain.handle('solve-from-screen', async (event, { language } = {}) => {
     overlayWindow.hide();
     await new Promise(r => setTimeout(r, 150));
 
-    // Use macOS screencapture CLI — more reliable than desktopCapturer in packaged apps
-    const { execFile } = require('child_process');
-    const tmpFile = path.join(os.tmpdir(), `prepaura_screen_${Date.now()}.jpg`);
-
-    await new Promise((resolve, reject) => {
-      execFile('screencapture', ['-x', '-t', 'jpg', '-m', tmpFile], { timeout: 8000 }, (err) => {
-        if (err) reject(new Error('Screen capture failed — grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording'));
-        else resolve();
-      });
+    // Cross-platform screen capture using Electron's desktopCapturer
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
     });
 
     overlayWindow.show();
 
-    const imageBuffer = fs.readFileSync(tmpFile);
-    try { fs.unlinkSync(tmpFile); } catch (_) {}
+    if (!sources || sources.length === 0) {
+      const permMsg = process.platform === 'darwin'
+        ? 'Screen capture failed — grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording'
+        : 'Screen capture failed — grant Screen Recording permission in Windows Settings → Privacy & Security → Screen capture';
+      throw new Error(permMsg);
+    }
 
-    // Resize to max 1280px to keep payload small
-    const { nativeImage } = require('electron');
-    const img = nativeImage.createFromBuffer(imageBuffer);
+    // thumbnail is already a nativeImage — no temp file needed
+    const img = sources[0].thumbnail;
     const { width: imgW } = img.getSize();
     const scale = Math.min(1, 1280 / imgW);
     const resized = img.resize({ width: Math.round(imgW * scale) });
@@ -335,6 +333,14 @@ No intro. No text outside the format.`;
 // ─── IPC: BlackHole Multi-Output setup ──────────────────────
 
 ipcMain.handle('setup-audio', async () => {
+  if (process.platform !== 'darwin') {
+    return {
+      success: false,
+      message: process.platform === 'win32'
+        ? 'Audio setup is macOS-only. On Windows, install VB-Audio Virtual Cable (vb-audio.com/Cable) and set it as your playback device. PrepAura will detect "CABLE Output" automatically.'
+        : 'Audio setup is only available on macOS.'
+    };
+  }
   const { execFile } = require('child_process');
   const scriptPath = resourcePath('setup_audio.swift');
   const env = { ...process.env, PATH: `${process.env.PATH || ''}:/usr/bin:/usr/local/bin` };
