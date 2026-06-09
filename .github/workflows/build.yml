@@ -21,6 +21,12 @@
 
 name: Build PrepAura
 
+# Opt into Node.js 24 for action runners (checkout, cache, upload-artifact, etc.)
+# Required before June 16 2026 — after that date Node 20 actions are force-migrated.
+# This does NOT change the Node version used to build the app (set by actions/setup-node).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_dispatch:
 
