@@ -63,7 +63,7 @@ jobs:
           # ── Windows x64 NSIS installer ───────────────────────────────────
           # Builds natively on the Windows runner — no wine required.
           # NSIS and 7-Zip are pre-installed on windows-latest.
-          - os: windows-latest
+          - os: windows-2025
             os-name: Windows
             build-cmd: build:win
             artifact-name: PrepAura-Windows
