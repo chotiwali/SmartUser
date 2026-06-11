@@ -81,227 +81,166 @@ function clearAnswerUI() {
 }
 
 // Parse full AI text into approach objects — resilient to messy model formatting
-// Each approach: { name, tag, context, bullets, usecase, code }
-function parseApproaches(text) {
-  if (!text) return [];
+// ── Interview response parser ──────────────────────────────────
+function wordCount(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
 
-  // Primary split: explicit --- separators
-  let blocks = text.split(/\n?---+\n?/).map(b => b.trim()).filter(Boolean);
+function parseInterviewResponse(text) {
+  if (!text) return null;
+  const result = { answer: '', keyPoints: [], followUps: [], code: '' };
 
-  // Fallback: if model didn't use ---, split on every **Title** + [TAG] boundary
-  if (blocks.length <= 1 && blocks[0]) {
-    const fallback = blocks[0].split(/(?=\n\*\*[^\n*]+\*\*\s*\n\s*\[)/).map(b => b.trim()).filter(Boolean);
-    if (fallback.length > 1) blocks = fallback;
+  // Extract code block first
+  const codeMatch = text.match(/```[\w]*\n?([\s\S]*?)```/);
+  if (codeMatch) {
+    result.code = codeMatch[1].trim();
+    text = text.replace(/```[\s\S]*?```/, '').trim();
   }
 
-  // Last resort: split on every **Title** line at start of a section
-  if (blocks.length <= 1 && blocks[0]) {
-    const lastResort = blocks[0].split(/(?=^\*\*[^\n*]+\*\*)/m).map(b => b.trim()).filter(Boolean);
-    if (lastResort.length > 1) blocks = lastResort;
+  const answerMatch = text.match(/🎯\s*Interview Answer\s*\n([\s\S]*?)(?=💡|🔥|$)/);
+  if (answerMatch) result.answer = answerMatch[1].trim();
+
+  const keyPointsMatch = text.match(/💡\s*Key Points\s*\n([\s\S]*?)(?=🔥|$)/);
+  if (keyPointsMatch) {
+    result.keyPoints = keyPointsMatch[1]
+      .split('\n').map(l => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
   }
 
-  return blocks.map(block => {
-    // 1. Pull out ALL code blocks first
-    const codeMatch = block.match(/```[\w]*\n?([\s\S]*?)```/);
-    const code = codeMatch ? codeMatch[1].trim() : '';
-    const noCode = block.replace(/```[\s\S]*?```/g, '').trim();
+  const followUpMatch = text.match(/🔥\s*Follow-up Questions\s*\n([\s\S]*?)$/);
+  if (followUpMatch) {
+    result.followUps = followUpMatch[1]
+      .split('\n').map(l => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
+  }
 
-    // 2. First **bold** line anywhere = title
-    const nameMatch = noCode.match(/\*\*([^*\n]+?)\*\*/);
-    const name = nameMatch ? nameMatch[1].replace(/:$/, '').trim() : '';
+  // Fallback: treat entire text as answer if no sections found
+  if (!result.answer && !result.keyPoints.length) {
+    result.answer = text.replace(/```[\s\S]*?```/g, '').trim();
+  }
 
-    // 3. Remove title from body
-    const body = noCode.replace(/\*\*[^*\n]+?\*\*\n?/, '').trim();
-    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+  return result;
+}
 
-    // 4. Special lines
-    const tagLine     = lines.find(l => /^\[.+\]$/.test(l));
-    const contextLine = lines.find(l => /^Context:/i.test(l));
-    const ucLine      = lines.find(l => /^use cases?:/i.test(l));
+function buildInterviewEl(parsed, streaming = false) {
+  const container = document.createElement('div');
+  container.className = 'interview-response' + (streaming ? ' streaming' : '');
 
-    const tag     = tagLine     ? tagLine.replace(/[\[\]]/g, '').trim()       : '';
-    const context = contextLine ? contextLine.replace(/^Context:\s*/i, '')     : '';
-    const usecase = ucLine      ? ucLine.replace(/^use cases?:\s*/i, '')       : '';
+  const wc = wordCount(parsed.answer);
+  const isLong = wc > 120;
 
-    // 5. Explicit bullet lines (•, -, *)
-    const explicitBullets = lines
-      .filter(l => /^[•\-*]/.test(l))
-      .map(l => l.replace(/^[•\-*]\s*/, '').trim())
-      .filter(Boolean);
+  // 🎯 Spoken answer block
+  if (parsed.answer) {
+    const answerBlock = document.createElement('div');
+    answerBlock.className = 'spoken-answer-block';
 
-    // 6. If model used **Sub-header:** style, convert content lines to bullets
-    let bullets = explicitBullets;
-    if (!bullets.length) {
-      const derived = [];
-      for (const line of lines) {
-        if (/^\[.+\]$/.test(line)) continue;            // skip [TAG]
-        if (/^Context:/i.test(line)) continue;           // skip Context:
-        if (/^use cases?:/i.test(line)) continue;        // skip Use case:
-        if (/^(Example|Examples?):?$/i.test(line)) continue; // skip bare "Example:"
+    const label = document.createElement('div');
+    label.className = 'ir-label';
+    label.textContent = '🎯 Interview Answer';
+    answerBlock.appendChild(label);
 
-        const subHeader = line.match(/^\*\*([^*]+?)\*\*:?\s*(.*)/);
-        if (subHeader) {
-          const hText = subHeader[1].replace(/:$/, '').trim();
-          const rest  = subHeader[2].trim();
-          // Only add if not a generic label like "Example"
-          if (!/^examples?$/i.test(hText)) {
-            derived.push(rest ? `${hText}: ${rest}` : hText);
-          }
-        } else if (line.length > 3 && !line.startsWith('*')) {
-          derived.push(line);
-        }
-      }
-      bullets = derived;
+    const answerEl = document.createElement('div');
+    answerEl.className = 'spoken-answer';
+    answerEl.textContent = parsed.answer;
+    answerBlock.appendChild(answerEl);
+
+    if (!streaming && wc > 0) {
+      const wEl = document.createElement('div');
+      wEl.className = 'word-count';
+      wEl.textContent = `${wc} words`;
+      answerBlock.appendChild(wEl);
     }
 
-    return { name, tag, context, bullets, usecase, code, _raw: body };
-  }).filter(a => a.name || a.bullets.length || a.code);
-}
-
-const TAG_COLORS = ['#5ab4ff','#7dd3a8','#f0a05a','#c084fc','#f87171','#facc15'];
-
-function buildRowEl(approach, streaming = false, index = 0) {
-  const color = TAG_COLORS[index % TAG_COLORS.length];
-  const row = document.createElement('div');
-  row.className = 'answer-row' + (streaming ? ' streaming' : '');
-  row.style.setProperty('--card-color', color);
-
-  // ── Card header ──────────────────────────────
-  const header = document.createElement('div');
-  header.className = 'answer-row-header';
-
-  // Number badge
-  const num = document.createElement('div');
-  num.className = 'approach-num';
-  num.textContent = index + 1;
-  header.appendChild(num);
-
-  const titleWrap = document.createElement('div');
-  titleWrap.className = 'answer-title-wrap';
-
-  if (approach.name) {
-    const label = document.createElement('div');
-    label.className = 'answer-row-label';
-    label.textContent = approach.name;
-    titleWrap.appendChild(label);
-  }
-  if (approach.context) {
-    const ctx = document.createElement('div');
-    ctx.className = 'answer-row-context';
-    ctx.textContent = approach.context;
-    titleWrap.appendChild(ctx);
-  }
-  header.appendChild(titleWrap);
-
-  if (approach.tag) {
-    const tag = document.createElement('div');
-    tag.className = 'answer-row-tag';
-    tag.textContent = approach.tag;
-    header.appendChild(tag);
+    container.appendChild(answerBlock);
   }
 
-  row.appendChild(header);
+  // Details panel (key points + follow-ups + code)
+  const details = document.createElement('div');
+  details.className = 'answer-details' + (isLong && !streaming ? ' hidden' : '');
 
-  // ── Body: theory + code side by side ─────────
-  const body = document.createElement('div');
-  body.className = 'answer-row-body';
-
-  // Left: bullets
-  const theory = document.createElement('div');
-  theory.className = 'row-theory';
-  const hasTheory = approach.bullets.length || approach.usecase;
-
-  if (approach.bullets.length) {
+  if (parsed.keyPoints.length) {
+    const kpSection = document.createElement('div');
+    kpSection.className = 'ir-section';
+    const kpLabel = document.createElement('div');
+    kpLabel.className = 'ir-label';
+    kpLabel.textContent = '💡 Key Points';
+    kpSection.appendChild(kpLabel);
     const ul = document.createElement('ul');
-    approach.bullets.forEach(b => {
+    ul.className = 'ir-bullets';
+    parsed.keyPoints.forEach(pt => {
       const li = document.createElement('li');
-      li.textContent = b;
+      li.textContent = pt;
       ul.appendChild(li);
     });
-    theory.appendChild(ul);
-  } else if (!hasTheory) {
-    const p = document.createElement('p');
-    p.textContent = approach._raw || '';
-    theory.appendChild(p);
+    kpSection.appendChild(ul);
+    details.appendChild(kpSection);
   }
 
-  if (approach.usecase) {
-    const uc = document.createElement('div');
-    uc.className = 'row-usecase';
-    uc.innerHTML = `<span class="uc-icon">⚡</span><span>${escHtml(approach.usecase)}</span>`;
-    theory.appendChild(uc);
+  if (parsed.followUps.length) {
+    const fuSection = document.createElement('div');
+    fuSection.className = 'ir-section';
+    const fuLabel = document.createElement('div');
+    fuLabel.className = 'ir-label';
+    fuLabel.textContent = '🔥 Follow-up Questions';
+    fuSection.appendChild(fuLabel);
+    const ul = document.createElement('ul');
+    ul.className = 'ir-bullets followup';
+    parsed.followUps.forEach(q => {
+      const li = document.createElement('li');
+      li.textContent = q;
+      ul.appendChild(li);
+    });
+    fuSection.appendChild(ul);
+    details.appendChild(fuSection);
   }
 
-  // Right: code panel
-  const codePanel = document.createElement('div');
-  codePanel.className = 'row-code';
-
-  if (approach.code && hasTheory) {
-    const langBar = document.createElement('div');
-    langBar.className = 'row-code-lang';
-    langBar.innerHTML = `<span class="code-dot"></span>swift`;
-    codePanel.appendChild(langBar);
+  if (parsed.code) {
+    const codeSection = document.createElement('div');
+    codeSection.className = 'ir-code-section';
     const pre = document.createElement('pre');
-    pre.innerHTML = `<code>${escHtml(approach.code)}</code>`;
-    codePanel.appendChild(pre);
-  } else if (approach.code && !hasTheory) {
-    const p = document.createElement('p');
-    p.style.whiteSpace = 'pre-wrap';
-    p.textContent = approach.code;
-    theory.appendChild(p);
-    codePanel.innerHTML = `<div class="no-code">—</div>`;
-  } else if (!streaming) {
-    codePanel.innerHTML = `<div class="no-code">—</div>`;
+    pre.className = 'ir-code';
+    pre.innerHTML = `<code>${escHtml(parsed.code)}</code>`;
+    codeSection.appendChild(pre);
+    details.appendChild(codeSection);
   }
 
-  body.appendChild(theory);
-  body.appendChild(codePanel);
-  row.appendChild(body);
-  return row;
+  container.appendChild(details);
+
+  // Expand button — only when answer is long and not streaming
+  if (isLong && !streaming && (parsed.keyPoints.length || parsed.followUps.length || parsed.code)) {
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'expand-btn';
+    expandBtn.textContent = 'Expand Details ▾';
+    expandBtn.addEventListener('click', () => {
+      const hidden = details.classList.toggle('hidden');
+      expandBtn.textContent = hidden ? 'Expand Details ▾' : 'Collapse ▴';
+    });
+    container.appendChild(expandBtn);
+  }
+
+  return container;
 }
 
-// Final render — full parsed approaches
+// Final render — full parsed interview response
 function renderAnswer(text) {
   const rowsEl = document.getElementById('answer-rows');
   rowsEl.innerHTML = '';
-  const approaches = parseApproaches(text);
-  if (!approaches.length) {
-    // Fallback: show plain text
-    const row = document.createElement('div');
-    row.className = 'answer-row';
-    row.innerHTML = `<div class="answer-row-body"><div class="row-theory"><p>${escHtml(text.replace(/```[\s\S]*?```/g,'').trim())}</p></div><div class="row-code"><div class="no-code">—</div></div></div>`;
-    rowsEl.appendChild(row);
+  const parsed = parseInterviewResponse(text);
+  if (!parsed || (!parsed.answer && !parsed.keyPoints.length && !parsed.code)) {
+    const fallback = document.createElement('div');
+    fallback.className = 'interview-response';
+    fallback.innerHTML = `<div class="spoken-answer-block"><div class="spoken-answer">${escHtml(text.replace(/```[\s\S]*?```/g,'').trim())}</div></div>`;
+    rowsEl.appendChild(fallback);
     return;
   }
-  approaches.forEach((a, i) => rowsEl.appendChild(buildRowEl(a, false, i)));
+  rowsEl.appendChild(buildInterviewEl(parsed, false));
 }
 
-// Streaming render — progressively build rows as text arrives
+// Streaming render — show as text arrives
 function renderStreaming(text) {
   const rowsEl = document.getElementById('answer-rows');
-
-  // Split on --- to get partial blocks
-  const blocks = text.split(/\n---+\n?/).map(b => b.trim()).filter(Boolean);
-  // Sync DOM rows to block count
-  while (rowsEl.children.length > blocks.length) rowsEl.removeChild(rowsEl.lastChild);
-  while (rowsEl.children.length < blocks.length) rowsEl.appendChild(document.createElement('div'));
-
-  blocks.forEach((block, i) => {
-    const codeMatch = block.match(/```[\w]*\n?([\s\S]*?)```/);
-    const code = codeMatch ? codeMatch[1].trim() : '';
-    const noCode = block.replace(/```[\s\S]*?```/g, '').trim();
-    const nameMatch = noCode.match(/^\*\*(.+?)\*\*/);
-    const name = nameMatch ? nameMatch[1].trim() : '';
-    const body = noCode.replace(/^\*\*.+?\*\*\n?/, '').trim();
-    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
-    const bullets = lines.filter(l => /^[•\-*]/.test(l)).map(l => l.replace(/^[•\-*]\s*/, ''));
-    const usecaseLine = lines.find(l => /^use case:/i.test(l));
-    const usecase = usecaseLine ? usecaseLine.replace(/^use case:\s*/i, '') : '';
-
-    const approach = { name, bullets, usecase, code, _raw: body };
-    const newRow = buildRowEl(approach, true, i);
-    rowsEl.replaceChild(newRow, rowsEl.children[i]);
-  });
+  rowsEl.innerHTML = '';
+  const parsed = parseInterviewResponse(text) ||
+    { answer: text.replace(/```[\s\S]*?```/g, '').trim(), keyPoints: [], followUps: [], code: '' };
+  rowsEl.appendChild(buildInterviewEl(parsed, true));
 }
 
 function escHtml(s) {
@@ -816,7 +755,7 @@ async function processQuestion(question) {
     }
     if (chunk.error) {
       const rowsEl = document.getElementById('answer-rows');
-      rowsEl.innerHTML = `<div class="answer-row"><div class="answer-row-body"><div class="row-theory"><p>⚠ ${escHtml(chunk.error)}</p></div><div class="row-code"></div></div></div>`;
+      rowsEl.innerHTML = `<div class="interview-response"><div class="spoken-answer-block"><div class="spoken-answer">⚠ ${escHtml(chunk.error)}</div></div></div>`;
       setStatus('error', 'Error');
       if (isListening) setTimeout(() => setStatus('listen', 'Listening...'), 2000);
       return;
@@ -964,7 +903,7 @@ async function captureAndSolve() {
     if (chunk.error) {
       clearTimeout(timeout);
       document.getElementById('answer-rows').innerHTML =
-        `<div class="answer-row"><div class="answer-row-body"><div class="row-theory"><p>⚠ ${escHtml(chunk.error)}</p></div><div class="row-code"></div></div></div>`;
+        `<div class="interview-response"><div class="spoken-answer-block"><div class="spoken-answer">⚠ ${escHtml(chunk.error)}</div></div></div>`;
       setStatus('error', 'Error');
       captureBtn.classList.remove('scanning');
       captureBtn.title = `Capture screen & solve (${captureShortcut})`;

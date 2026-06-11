@@ -295,23 +295,27 @@ ipcMain.handle('solve-from-screen', async (event, { language } = {}) => {
       ? `Write ALL code solutions in ${language}.`
       : 'Use the same language as shown in the screenshot, or Python if none is shown.';
 
-    const visionPrompt = `Look at this screenshot and extract any coding problem or interview question visible.
-Provide 2-3 distinct solution approaches.${contextBlock}
+    const visionPrompt = `You are an expert Software Engineering Interview Assistant. Look at this screenshot, identify the coding problem or interview question, and respond with EXACTLY this structure:
+
+🎯 Interview Answer
+
+[Explain your approach in 50-120 words as you would speak it in a real interview. Confident, natural language. No intros.]
+
+💡 Key Points
+
+• time complexity
+• space complexity
+• key algorithmic insight
+• edge case to mention
+
+🔥 Follow-up Questions
+
+• [likely interviewer follow-up]?
+• [likely interviewer follow-up]?
+${contextBlock}
 ${langInstruction}
 
-Format each approach separated by ---:
-
-**[Approach name e.g. "Brute Force O(n²)", "Hash Map O(n)"]**
-• key insight
-• time/space complexity
-Use case: when to use this
-\`\`\`language
-// working solution
-\`\`\`
-
----
-
-No intro. No text outside the format.`;
+Then provide the solution code. No text outside this format.`;
 
     const stream = await groq.chat.completions.create({
       model: 'meta-llama/llama-4-scout-17b-16e-instruct',
@@ -388,144 +392,31 @@ ipcMain.handle('stream-ai-response', async (event, { transcript, history }) => {
   const interviewContext = s.get('interviewContext', '');
   const customPrompt = s.get('systemPrompt', '');
 
-  const basePrompt = `You are an expert iOS/Swift interview coach. Answer every question with EXACTLY 5 blocks progressing from basic to expert, separated by ---.
+  const basePrompt = `You are an expert Software Engineering Interview Assistant. Your primary goal is to provide the BEST possible interview answer that a candidate can speak aloud during a real interview.
 
-FORMAT — copy this structure exactly for every block:
+Respond with EXACTLY this structure and nothing else:
 
-**[Specific descriptive title — not generic, names the exact concept]**
-[TAG]
-Context: one sentence explaining what angle this block covers and why an interviewer asks about it
-• specific point — name actual Swift types, APIs, or method signatures
-• specific point
-• specific point
-Use case: In a [real app type], [concrete scenario showing this in practice]
-\`\`\`swift
-// 5-8 lines of focused working Swift code that directly demonstrates the bullets
-\`\`\`
+🎯 Interview Answer
+[Write a clear, confident spoken answer in 50-120 words. Use natural interview language — as if speaking directly to an interviewer. Cover: what the concept is, why it matters, and a concrete example or use case. No bullet points here — flowing prose only.]
 
----
+💡 Key Points
+• [key algorithmic or conceptual insight]
+• [time/space complexity if relevant, or a key trade-off]
+• [an important API, method, or design pattern to name-drop]
+• [an edge case or gotcha to mention]
+• [optional 5th point if critical]
 
-TAGS (pick one per block): BASIC | CORE API | PATTERN | ADVANCED | GOTCHA | PERFORMANCE | vs ALTERNATIVE
+🔥 Follow-up Questions
+• [most likely interviewer follow-up question]?
+• [second likely follow-up]?
+• [third likely follow-up — only if genuinely distinct]?
 
-BLOCK ORDER — always follow this progression:
-Block 1 [BASIC]         — What each option is, why it exists, when to reach for it
-Block 2 [CORE API]      — Key types, initializers, read/write methods an interviewer expects you to know by name
-Block 3 [PATTERN]       — The most common real-world usage pattern with concrete app scenario
-Block 4 [ADVANCED]      — Threading, memory, migrations, performance tradeoffs or edge cases
-Block 5 [GOTCHA or vs ALTERNATIVE] — A common mistake developers make OR comparison with a modern alternative
-
-MANDATORY RULES:
-• Output ALL 5 blocks — never fewer
-• EVERY block MUST be separated by a line containing only: ---
-• Exactly ONE **Title** per block — no other **bold** text anywhere inside the block body
-• Use bullet points (•) only — never use **Sub-header:** labels like **Use Cases:** **Benefits:** **Example:** inside a block
-• Every block needs a \`\`\`swift code snippet — shows the concept, not a generic template
-• No intro text before block 1, no summary after block 5
-
-SEPARATOR REMINDER: after every single block (including the last), write --- on its own line. If you forget ---, all blocks merge into one and the UI breaks.
-
-FULL EXAMPLE — question: "When to use Core Data, UserDefaults and FileManager?":
-
-**Choosing the Right Storage — Decision Framework**
-[BASIC]
-Context: Helps interviewers see you think about storage as a decision, not just syntax
-• Core Data — structured relational data, querying, relationships, large datasets (e.g. user posts, messages)
-• UserDefaults — tiny primitives only: Bool, Int, String, Date; never store models or arrays of objects
-• FileManager — raw files on disk: images, PDFs, audio, JSON blobs, custom formats
-Use case: In a social app, messages go in Core Data, "dark mode on" goes in UserDefaults, avatar images go in FileManager
-\`\`\`swift
-// Rule of thumb in one place
-let isOnboarded = UserDefaults.standard.bool(forKey: "onboarded")   // tiny flag
-let avatar = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                         .appendingPathComponent("avatar.jpg")       // file on disk
-// Core Data via NSPersistentContainer for structured records
-\`\`\`
-
----
-
-**Core Data, UserDefaults & FileManager — Key APIs**
-[CORE API]
-Context: Interviewers expect you to name actual types and methods, not just describe concepts
-• Core Data: NSPersistentContainer, NSManagedObjectContext, fetch(_:), save(), NSFetchRequest<T>
-• UserDefaults: standard.set(_:forKey:), standard.bool/integer/string(forKey:), synchronize() is legacy — not needed iOS 12+
-• FileManager: default, urls(for:in:), createDirectory(at:withIntermediateDirectories:), copyItem(at:to:), removeItem(at:)
-Use case: In a task manager app, fetch incomplete tasks with NSFetchRequest, store sort preference in UserDefaults
-\`\`\`swift
-// Core Data fetch
-let request = NSFetchRequest<Task>(entityName: "Task")
-request.predicate = NSPredicate(format: "isComplete == NO")
-let tasks = try context.fetch(request)
-
-// UserDefaults
-UserDefaults.standard.set("date", forKey: "sortOrder")
-
-// FileManager write
-let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                     .appendingPathComponent("export.json")
-try data.write(to: url)
-\`\`\`
-
----
-
-**Persisting User-Generated Content — Real-World Pattern**
-[PATTERN]
-Context: Shows you can apply the right storage to a realistic feature, not just recite theory
-• combine all three in one feature: settings in UserDefaults, metadata in Core Data, blobs in FileManager
-• store only the file path/URL in Core Data — never the binary data itself (keeps DB small and fast)
-• use background NSManagedObjectContext for writes so the main thread stays responsive
-Use case: In a photo journal app, photo metadata (date, caption, tags) in Core Data; the JPEG file in FileManager; grid layout preference in UserDefaults
-\`\`\`swift
-let bgContext = persistentContainer.newBackgroundContext()
-bgContext.perform {
-    let entry = JournalEntry(context: bgContext)
-    entry.caption = "Sunset"
-    entry.imagePath = savedFileURL.path   // path only, not the image data
-    try? bgContext.save()
-}
-UserDefaults.standard.set("grid", forKey: "layoutStyle")
-\`\`\`
-
----
-
-**Threading, Migration & Performance Edge Cases**
-[ADVANCED]
-Context: This separates mid-level from senior — knowing the failure modes of each storage layer
-• NSManagedObjectContext is not thread-safe — always use perform { } or a dedicated background context; never pass NSManagedObject across threads
-• UserDefaults is synchronous on the main thread — reading large custom objects (via NSKeyedArchiver) causes jank; keep values tiny
-• FileManager operations are blocking — always dispatch to a background queue; use coordinated reads for iCloud-backed files
-Use case: In a data-heavy fitness app, migrating Core Data schema requires NSMigratePersistentStoresAutomatically + a mapping model to avoid crashes on update
-\`\`\`swift
-// Safe Core Data background write
-persistentContainer.performBackgroundTask { ctx in
-    // do work here — ctx is thread-confined
-    try? ctx.save()
-}
-
-// FileManager off main thread
-DispatchQueue.global(qos: .utility).async {
-    try? FileManager.default.copyItem(at: src, to: dst)
-}
-\`\`\`
-
----
-
-**Common Mistake — Storing Objects in UserDefaults**
-[GOTCHA]
-Context: The single most common UserDefaults misuse seen in iOS code reviews
-• storing custom objects directly in UserDefaults crashes at runtime — it only accepts plist-compatible types
-• workaround is JSONEncoder → Data → set(forKey:), but that is a sign you should use Core Data or FileManager instead
-• another gotcha: calling synchronize() is redundant since iOS 12 and blocks the main thread unnecessarily
-Use case: Storing a User model in UserDefaults "because it's simple" — then hitting a crash in production when a new property is added without migration
-\`\`\`swift
-// WRONG — crashes: "attempt to insert non-property list object"
-UserDefaults.standard.set(myUserObject, forKey: "user")  // ❌
-
-// RIGHT — encode first, but consider Core Data for anything this complex
-let data = try? JSONEncoder().encode(myUserObject)
-UserDefaults.standard.set(data, forKey: "user")          // ✅ works, but smell
-\`\`\`
-
----`;
+RULES:
+• The 🎯 answer MUST be speakable — no markdown formatting inside it, no bullet points, no code blocks
+• 💡 Key Points: 3-5 bullets max, each under 15 words
+• 🔥 Follow-up Questions: 2-3 questions max, phrased as the interviewer would ask them
+• After the three sections, if a code example is helpful, add it as a plain code block — no extra label needed
+• No intro text, no summary, no text outside this format`;
   const contextBlock = interviewContext ? `\n\nInterview context: ${interviewContext}` : '';
   const systemPrompt = (customPrompt || basePrompt) + contextBlock;
 
