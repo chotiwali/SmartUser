@@ -303,7 +303,17 @@ body {
 }
 
 .ir-bullets.followup li::before { color: #f87171; }
-.ir-bullets.followup li { color: var(--text-muted); font-style: italic; }
+.ir-bullets.followup li { display: flex; flex-direction: column; gap: 2px; }
+
+.fu-question { color: var(--text); font-style: italic; }
+.fu-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: normal;
+  padding-left: 2px;
+  line-height: 1.4;
+  opacity: 0.8;
+}
 
 .expand-btn {
   align-self: flex-start;

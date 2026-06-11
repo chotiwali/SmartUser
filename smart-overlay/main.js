@@ -309,9 +309,8 @@ ipcMain.handle('solve-from-screen', async (event, { language } = {}) => {
 • edge case to mention
 
 🔥 Follow-up Questions
-
-• [likely interviewer follow-up]?
-• [likely interviewer follow-up]?
+• [likely interviewer follow-up]? → [one-sentence answer]
+• [likely interviewer follow-up]? → [one-sentence answer]
 ${contextBlock}
 ${langInstruction}
 
@@ -407,14 +406,14 @@ Respond with EXACTLY this structure and nothing else:
 • [optional 5th point if critical]
 
 🔥 Follow-up Questions
-• [most likely interviewer follow-up question]?
-• [second likely follow-up]?
-• [third likely follow-up — only if genuinely distinct]?
+• [most likely interviewer follow-up question]? → [one-sentence answer]
+• [second likely follow-up]? → [one-sentence answer]
+• [third likely follow-up — only if genuinely distinct]? → [one-sentence answer]
 
 RULES:
 • The 🎯 answer MUST be speakable — no markdown formatting inside it, no bullet points, no code blocks
 • 💡 Key Points: 3-5 bullets max, each under 15 words
-• 🔥 Follow-up Questions: 2-3 questions max, phrased as the interviewer would ask them
+• 🔥 Follow-up Questions: 2-3 questions max; each line: question? → one-sentence answer (under 20 words)
 • After the three sections, if a code example is helpful, add it as a plain code block — no extra label needed
 • No intro text, no summary, no text outside this format`;
   const contextBlock = interviewContext ? `\n\nInterview context: ${interviewContext}` : '';

@@ -109,7 +109,13 @@ function parseInterviewResponse(text) {
   const followUpMatch = text.match(/🔥\s*Follow-up Questions\s*\n([\s\S]*?)$/);
   if (followUpMatch) {
     result.followUps = followUpMatch[1]
-      .split('\n').map(l => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean);
+      .split('\n').map(l => l.replace(/^[•\-*]\s*/, '').trim()).filter(Boolean)
+      .map(l => {
+        const sep = l.indexOf(' → ');
+        return sep !== -1
+          ? { q: l.slice(0, sep).trim(), hint: l.slice(sep + 3).trim() }
+          : { q: l, hint: '' };
+      });
   }
 
   // Fallback: treat entire text as answer if no sections found
@@ -183,9 +189,18 @@ function buildInterviewEl(parsed, streaming = false) {
     fuSection.appendChild(fuLabel);
     const ul = document.createElement('ul');
     ul.className = 'ir-bullets followup';
-    parsed.followUps.forEach(q => {
+    parsed.followUps.forEach(({ q, hint }) => {
       const li = document.createElement('li');
-      li.textContent = q;
+      const qEl = document.createElement('span');
+      qEl.className = 'fu-question';
+      qEl.textContent = q;
+      li.appendChild(qEl);
+      if (hint) {
+        const hEl = document.createElement('span');
+        hEl.className = 'fu-hint';
+        hEl.textContent = hint;
+        li.appendChild(hEl);
+      }
       ul.appendChild(li);
     });
     fuSection.appendChild(ul);
