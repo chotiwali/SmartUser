@@ -579,7 +579,7 @@ async function findBlackHoleDevice() {
 // ── Mix mic + BlackHole into a single stream ───────────────────
 async function getMixedStream(blackholeDevice) {
   const micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+    audio: { echoCancellation: true, noiseSuppression: true }
   });
 
   let blackholeStream = null;
@@ -592,7 +592,7 @@ async function getMixedStream(blackholeDevice) {
     return micStream;
   }
 
-  const mixCtx = new AudioContext({ sampleRate: 16000 });
+  const mixCtx = new AudioContext();
   const dest = mixCtx.createMediaStreamDestination();
   mixCtx.createMediaStreamSource(micStream).connect(dest);
   mixCtx.createMediaStreamSource(blackholeStream).connect(dest);
@@ -614,7 +614,7 @@ async function startWhisperMode() {
       stream = await getMixedStream(blackhole);
     } else {
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+        audio: { echoCancellation: true, noiseSuppression: true }
       });
     }
 
