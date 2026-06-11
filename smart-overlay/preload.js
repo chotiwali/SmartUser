@@ -32,4 +32,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // License / Trial
   getTrialStatus:    ()    => ipcRenderer.invoke('get-trial-status'),
   activateLicense:   (key) => ipcRenderer.invoke('activate-license', key),
+
+  // Window management
+  quitApp:               ()              => ipcRenderer.send('quit-app'),
+  setIgnoreMouseEvents:  (ignore, opts)  => ipcRenderer.send('set-ignore-mouse-events', ignore, opts),
 });

@@ -164,6 +164,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// ─── IPC: Window management ──────────────────────────────────
+
+ipcMain.on('quit-app', () => {
+  app.quit();
+});
+
+ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
+  if (overlayWindow) {
+    overlayWindow.setIgnoreMouseEvents(ignore, options || {});
+  }
+});
+
 // ─── IPC: License / Trial ────────────────────────────────────
 
 ipcMain.handle('get-trial-status', () => getTrialStatus());

@@ -43,6 +43,21 @@ const captureShortcut = isMac ? '⌘⇧C' : 'Ctrl+Shift+C';
 
 // Apply platform-correct labels on page load
 document.getElementById('capture-btn').title = `Capture screen & solve (${captureShortcut})`;
+
+// ── Quit button ───────────────────────────────────────────────
+document.getElementById('close-app-btn').addEventListener('click', () => {
+  window.electronAPI.quitApp();
+});
+
+// ── Click-through for transparent areas ──────────────────────
+// When the cursor is over the solid UI panel, receive mouse events normally.
+// When it moves into the transparent gap around the panel, forward events
+// to whatever window sits below so other apps remain clickable.
+document.addEventListener('mousemove', (e) => {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const overUI = el && (el.closest('.panel') || el.closest('#upgrade-modal'));
+  window.electronAPI.setIgnoreMouseEvents(!overUI, { forward: true });
+});
 if (!isMac) {
   const kbdEls = document.querySelectorAll('.shortcuts-info .shortcut kbd');
   if (kbdEls[0]) kbdEls[0].textContent = 'Ctrl+Shift+Space';
